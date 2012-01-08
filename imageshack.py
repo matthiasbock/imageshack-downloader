@@ -25,6 +25,7 @@ class ImageShack:
 
 		self.r.POST('imageshack.us/auth.php', {'stay_logged_in':'true', 'format':'json', 'username':username, 'password':password})
 		print str(self.r.Page)
+		self.logged_in = True
 		return True
 
 	def get_picture_list(self, ipage, tagid=-1):
@@ -78,4 +79,34 @@ class ImageShack:
 		mc.set('imageshack-tags', pickle.dumps(tags))
 		print pickle.loads(mc.get('imageshack-tags'))
 		del mc
+
+	def get_album_list(self):
+		if not self.logged_in:
+			if not self.login():
+				return False
+		
+		self.r.GET('my.imageshack.us/my_gallery/')
+		self.r.Page.save()
+
+		self.inumitems = int(between(self.r.Page, '<input type="hidden" id="inumitems" value="', '"'))		# galleries
+		self.inumcached = int(between(self.r.Page, '<input type="hidden" id="inumcached" value="', '"'))	# number of galleries listed
+
+		mc = memcache.Client(['127.0.0.1:11211'], debug=1)
+		for i in range(self.inumcached):
+			div = between(self.r.Page, '<div id="i'+str(i)+'">', '</div></div>', include_after=True)
+			gallery = {
+				'title'		: between(div, '<div class="igt">', '</div>'),
+				'link'		: between(div, '<div class="ipl">', '</div>'),
+				'created'	: between(div, '<div class="id">', '</div>'),
+				'modified'	: between(div, '<div class="idm">', '</div>'),
+				'server'	: between(div, '<div class="igs">', '</div>'),
+				'preview'	: between(div, '<div class="ign">', '</div>')
+				}
+			mc.set(gallery['link'], pickle.dumps(gallery))
+			print pickle.loads(mc.get(gallery['link']))['title']
+		del mc
+
+
+	def __del__(self):
+		self.r.GET('my.imageshack.us/logout.php')
 
