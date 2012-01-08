@@ -6,7 +6,7 @@ import re
 
 ElementClassesOfInterest = { "input": ["type", "name", "id", "value"], "img": ["name", "id", "src"] }
 
-def between(hay, before, after, occurence=1):			# return substring from haystack between "before" and "after"
+def between(hay, before, after, occurence=1, include_before=False, include_after=False): # return substring from haystack between "before" and "after"
 	haystack = str(hay)
 	start = 0
 	for i in range(1, occurence):
@@ -14,8 +14,14 @@ def between(hay, before, after, occurence=1):			# return substring from haystack
 	p = haystack.find(before, start)
 	if p < 0:
 		return ''
-	p += len(before)
+	if not include_before:
+		p += len(before)
 	q = haystack.find(after, p)
+	if q < 0:
+		q = len(haystack)-1
+	else:
+		if include_after:
+			q += len(after)
 	return haystack[p:q]
 
 def getvalue( haystack, field ):				# return the value in haystack: '... field=value ...'

@@ -8,4 +8,4 @@ from imageshack import ImageShack
 i = ImageShack(username, password)
 
 i.login()
-
+i.get_picture_list(1)
