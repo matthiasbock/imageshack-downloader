@@ -1,25 +1,11 @@
 #!/usr/bin/python
 # -*- coding: iso-8859-15 -*-
 
-from ConfigParser import RawConfigParser
+from config import loadconfig
+username, password = loadconfig()
 
-parser = RawConfigParser()
-parser.read('imageshack.conf')
+from imageshack import ImageShack
+i = ImageShack(username, password)
 
-username = parser.get('Login', 'Username')
-password = parser.get('Login', 'Password')
+i.login()
 
-del parser
-
-
-from robot import Robot
-
-r = Robot(debug=True)
-
-r.GET('imageshack.us')
-r.Page.save('index.html')
-
-#	l_login
-#	l_password
-
-del r
