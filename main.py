@@ -7,4 +7,4 @@ username, password = loadconfig()
 from imageshack import ImageShack
 
 i = ImageShack(username, password)
-i.get_picture_list(1)
+i.get_tag_list()
