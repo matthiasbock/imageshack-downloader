@@ -4,12 +4,15 @@
 from robot import Robot
 import random
 from htmlparser import between
+import memcache
+import pickle
 
 class ImageShack:
 	def __init__(self, username=None, password=None):
 		self.username = username
 		self.password = password
 		self.r = Robot(debug=True)
+		self.logged_in = False
 		random.seed()
 
 	def login(self, username=None, password=None):
@@ -21,13 +24,15 @@ class ImageShack:
 
 		self.r.POST('imageshack.us/auth.php', {'stay_logged_in':'true', 'format':'json', 'username':username, 'password':password})
 		print str(self.r.Page)
+		return True
 
 	def get_picture_list(self, ipage, tagid=-1):
-		# /images.php?ipage=1&tagid=-1&rand=0.1234567890123456
+		if not self.logged_in:
+			if not self.login():
+				return False
 
 		rand = '0.'+''.join([str(random.randint(0,9)) for i in range(16)])
-
-		self.r.GET('my.imageshack.us/images.php?ipage=1&tagid=-1&rand=0.1234567890123456')
+		self.r.GET('my.imageshack.us/images.php?ipage='+str(ipage)+'&tagid='+str(tagid)+'&rand='+rand)
 
 		self.inumpages = int(between(self.r.Page, '<input type="hidden" id="inumpages" value="', '"'))		# pages
 		self.inumitems = int(between(self.r.Page, '<input type="hidden" id="inumitems" value="', '"'))		# images
@@ -35,13 +40,22 @@ class ImageShack:
 		self.iendpage = int(between(self.r.Page, '<input type="hidden" id="iendpage" value="', '"'))		# page until which the cache works
 		self.inumcached = int(between(self.r.Page, '<input type="hidden" id="inumcached" value="', '"'))	# number of images listed
 
+		mc = memcache.Client(['127.0.0.1:11211'], debug=1)
+
 		for i in range(self.inumcached):
 			div = between(self.r.Page, '<div id="i'+str(i)+'">', '</div></div></div></div>', include_after=True)
-			id		= between(div, '<div class="ii">', '</div>')
-			server		= between(div, '<div class="is">', '</div>')
-			filename	= between(div, '<div class="if">', '</div>')
-			bytes		= between(div, '<div class="ib">', '</div>')
-			date		= between(div, '<div class="id">', '</div>')
-			public		= between(div, '<div class="ip">', '</div>')
-			tags		= between(div, '<div class="tags">', '</div></div></div>')
-			print filename+' '+bytes+' '+date
+			image = {
+				'id'		: between(div, '<div class="ii">', '</div>'),
+				'server'	: between(div, '<div class="is">', '</div>'),
+				'filename'	: between(div, '<div class="if">', '</div>'),
+				'bytes'		: between(div, '<div class="ib">', '</div>'),
+				'date'		: between(div, '<div class="id">', '</div>'),
+				'public'	: between(div, '<div class="ip">', '</div>'),
+				'tags'		: between(div, '<div class="tags">', '</div></div></div>')
+				}
+
+			mc.set(image['filename'], pickle.dumps(image))
+
+#			print pickle.loads(mc.get(image['filename']))['date']
+
+		del mc

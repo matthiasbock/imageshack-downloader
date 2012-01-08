@@ -5,7 +5,6 @@ from config import loadconfig
 username, password = loadconfig()
 
 from imageshack import ImageShack
-i = ImageShack(username, password)
 
-i.login()
+i = ImageShack(username, password)
 i.get_picture_list(1)
