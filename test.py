@@ -9,11 +9,11 @@ from imageshack import ImageShack
 print 'Login ...'
 i = ImageShack(username, password)
 
-#print 'Requesting image list ...'
-#l = i.get_image_list()
-#print l
-#print len(l)
+print 'Requesting image list ...'
+images = i.get_image_list()
+print len(images)
 
-print 'Requesting tag list ...'
-print i.get_tag_list()
+print 'Requesting album list ...'
+i.get_album_list()
+
 
