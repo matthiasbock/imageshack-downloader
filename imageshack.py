@@ -55,19 +55,25 @@ class ImageShack:
 			if not self.login():
 				return False
 
+		print 'page '+str(ipage)
 		self.r.GET('my.imageshack.us/images.php?ipage='+str(ipage)+'&tagid='+str(tagid)+'&rand='+rand() )
 
-		self.inumpages = int(between(self.r.Page, '<input type="hidden" id="inumpages" value="', '"'))		# image pages
-		self.inumitems = int(between(self.r.Page, '<input type="hidden" id="inumitems" value="', '"'))		# image count
-		self.inumcached = int(between(self.r.Page, '<input type="hidden" id="inumcached" value="', '"'))	# images on current page
+		self.inumpages = int(between(self.r.Page, '<input type="hidden" id="inumpages" value="', '"'))		# number of image pages
+		self.inumitems = int(between(self.r.Page, '<input type="hidden" id="inumitems" value="', '"'))		# number of images in total
+		self.inumcached = int(between(self.r.Page, '<input type="hidden" id="inumcached" value="', '"'))	# number of images on current page
 
-		self.Images = []
 		for i in range(self.inumcached):
-			self.Images.append(Image(between(self.r.Page, '<div id="i'+str(i)+'">', '</div></div></div></div>', include_after=True), self))
+			img = Image(between(self.r.Page, '<div id="i'+str(i)+'">', '</div></div></div></div>', include_after=True), self)
+			if not img in self.Images:
+				self.Images.append(img)
+			
 
-	def get_image_list(self, ipage=1, tagid=-1):
-		if self.Images is None:
-			self.download_image_list(ipage, tagid)
+	def get_image_list(self, tagid=-1):
+		self.Images = []
+		self.download_image_list(1, tagid)
+		if self.inumpages > 1:
+			for i in range(self.inumpages-1):
+				self.download_image_list(i+2, tagid)
 		return self.Images
 
 	# Tags
