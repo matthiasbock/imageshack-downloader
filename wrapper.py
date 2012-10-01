@@ -1,20 +1,12 @@
-#!/usr/bin/env python
-
-#    Copyright (C) 2001  Jeff Epler  <jepler@unpythonic.dhs.org>
-#    Copyright (C) 2006  Csaba Henk  <csaba.henk@creo.hu>
-#
-#    This program can be distributed under the terms of the GNU LGPL.
-#    See the file COPYING.
-#
+#!/usr/bin/python
 
 import os, sys
+
 from errno import *
 from stat import *
 import fcntl
-
 import fuse
 from fuse import Fuse
-
 
 if not hasattr(fuse, '__version__'):
     raise RuntimeError, \
@@ -36,28 +28,14 @@ def flag2mode(flags):
     return m
 
 
-class Xmp(Fuse):
+class ImageshackWrapper(Fuse):
 
     def __init__(self, *args, **kw):
 
         Fuse.__init__(self, *args, **kw)
 
-        # do stuff to set up your filesystem here, if you want
-        #import thread
-        #thread.start_new_thread(self.mythread, ())
         self.root = '/'
         self.file_class = self.XmpFile
-
-#    def mythread(self):
-#
-#        """
-#        The beauty of the FUSE python implementation is that with the python interp
-#        running in foreground, you can have threads
-#        """
-#        print "mythread: started"
-#        while 1:
-#            time.sleep(120)
-#            print "mythread: ticking"
 
     def getattr(self, path):
         return os.lstat("." + path)
@@ -245,12 +223,11 @@ class Xmp(Fuse):
 def main():
 
     usage = """
-Userspace nullfs-alike: mirror the filesystem tree from some point on.
+mounts an Imageshack account as a pseudo file-system
 
 """ + Fuse.fusage
 
-    server = Xmp(version="%prog " + fuse.__version__,
-                 usage=usage)
+    server = ImageshackWrapper(version="%prog " + fuse.__version__, usage=usage)
 
     server.parser.add_option(mountopt="root", metavar="PATH", default='/',
                              help="mirror filesystem from under PATH [default: %default]")
@@ -268,3 +245,4 @@ Userspace nullfs-alike: mirror the filesystem tree from some point on.
 
 if __name__ == '__main__':
     main()
+
