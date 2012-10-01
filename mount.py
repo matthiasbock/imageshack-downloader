@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
 import os, sys
-
 from errno import *
 from stat import *
 import fcntl
@@ -17,7 +16,6 @@ fuse.fuse_python_api = (0, 2)
 # We use a custom file class
 fuse.feature_assert('stateful_files', 'has_init')
 
-
 def flag2mode(flags):
     md = {os.O_RDONLY: 'r', os.O_WRONLY: 'w', os.O_RDWR: 'w+'}
     m = md[flags & (os.O_RDONLY | os.O_WRONLY | os.O_RDWR)]
@@ -28,24 +26,36 @@ def flag2mode(flags):
     return m
 
 
+from configparser import loadconfig
+from imageshack import ImageShack
+
 class ImageshackWrapper(Fuse):
 
     def __init__(self, *args, **kw):
 
         Fuse.__init__(self, *args, **kw)
 
+	username, password = loadconfig()
+	self.remote = ImageShack(username, password)
+
         self.root = '/'
         self.file_class = self.XmpFile
 
     def getattr(self, path):
-        return os.lstat("." + path)
+        return os.lstat(".vmlinuz")
 
     def readlink(self, path):
         return os.readlink("." + path)
 
     def readdir(self, path, offset):
-        for e in os.listdir("." + path):
-            yield fuse.Direntry(e)
+
+	print 'Login ...'
+
+	print 'Requesting image list ...'
+	images = self.remote.get_image_list()
+	for image in images:
+#		print "http://img"+image.server+".imageshack.us/img"+image.server+"/88/"+image.filename
+		yield fuse.Direntry(image.filename)
 
     def unlink(self, path):
         os.unlink("." + path)
@@ -80,7 +90,7 @@ class ImageshackWrapper(Fuse):
         os.mkdir("." + path, mode)
 
     def utime(self, path, times):
-        os.utime("." + path, times)
+        os.utime(".vmlinuz", times)
 
 #    The following utimens method would do the same as the above utime method.
 #    We can't make it better though as the Python stdlib doesn't know of
@@ -90,7 +100,7 @@ class ImageshackWrapper(Fuse):
 #      os.utime("." + path, (ts_acc.tv_sec, ts_mod.tv_sec))
 
     def access(self, path, mode):
-        if not os.access("." + path, mode):
+        if not os.access("/boot", mode):
             return -EACCES
 
 #    This is how we could add stub extended attribute handlers...
@@ -173,7 +183,7 @@ class ImageshackWrapper(Fuse):
             os.close(os.dup(self.fd))
 
         def fgetattr(self):
-            return os.fstat(self.fd)
+            return os.fstat(".vmlinuz")#self.fd)
 
         def ftruncate(self, len):
             self.file.truncate(len)
