@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: iso-8859-15 -*-
 
-from robot import Robot
+from httpclient import HttpClient
 import random
 from htmlparser import between
 import pickle
@@ -22,7 +22,7 @@ class ImageShack:
 
 	def reset(self):
 		random.seed()
-		self.r = Robot(debug=False)
+		self.r = HttpClient(debug=False)
 		self.logged_in = False
 		self.Images = None
 		self.Tags = None

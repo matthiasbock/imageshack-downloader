@@ -4,9 +4,44 @@
 from urllib import quote, quote_plus
 import re
 
-ElementClassesOfInterest = { "input": ["type", "name", "id", "value"], "img": ["name", "id", "src"] }
+def unescape(s):
+	from htmllib import HTMLParser
+	p = HTMLParser(None)
+	p.save_bgn()
+	p.feed(s)
+	return p.save_end()
 
-def between(hay, before, after, occurence=1, include_before=False, include_after=False): # return substring from haystack between "before" and "after"
+def find_closing(element, page, start=0):
+	element = element.lower()
+	page = page.lower()
+
+	children = True
+	while children:
+		opening = page.find('<'+element+' ', start+1)
+		closing = page.find('</'+element+'>', start+1)
+		if closing < opening or opening == -1:		# no (more) children of the same class
+			return closing
+
+		start = find_closing(element, page, opening)
+		if start == -1:					# end of page or page corrupted
+			return start
+
+def straddle(page, startkey):
+	p = page.find(startkey)
+	if p < 0:
+		return '',page
+	p += len(startkey)
+
+	startkey = startkey.strip()
+	end = startkey.find(' ')
+	if end == -1:
+		end = len(startkey)
+	element = startkey[1:end]
+	q = find_closing(element, page, p)
+
+	return page[:p], page[q:]
+
+def between(hay, before, after, occurence=1, include=False, include_before=False, include_after=False): # return substring from haystack between "before" and "after"
 	haystack = str(hay)
 	start = 0
 	for i in range(1, occurence):
@@ -14,15 +49,18 @@ def between(hay, before, after, occurence=1, include_before=False, include_after
 	p = haystack.find(before, start)
 	if p < 0:
 		return ''
-	if not include_before:
+	if (not include) and (not include_before):
 		p += len(before)
 	q = haystack.find(after, p)
 	if q < 0:
 		q = len(haystack)-1
 	else:
-		if include_after:
+		if include or include_after:
 			q += len(after)
 	return haystack[p:q]
+
+def getflashvar(haystack, key):
+	return between(haystack, 'flashvars.'+key+'="', '"')
 
 def getvalue( haystack, field ):				# return the value in haystack: '... field=value ...'
 	lower = haystack.lower().replace(">", " ")
@@ -88,6 +126,8 @@ def e(c, base):
 			#	0-9
 			#	a-z
 
+ElementClassesOfInterest = { "input": ["type", "name", "id", "value"], "img": ["name", "id", "src"] }
+
 class Element:							# Form method parse stores it's elements as array of Element classes
 	def __init__(self, HTML):
 		p = HTML.find("<")+1
@@ -114,36 +154,25 @@ class Form:							# Robot method parse() stores results as array of Form classes
 
 		lower = HTML.lower()	# mit ">"
 		for Class in ElementClassesOfInterest.keys():
-			self.__dict__[ Class ] = []
+			self.__dict__[ Class ] = {}
 			starter = "<"+Class+" "
 			p = lower.find( starter )
 			while ( p > -1 ):
 				q = lower.find( ">", p )
-				self.__dict__[ Class ].append( Element(HTML[p:q]) )
+				e = Element(HTML[p:q])
+				if "name" in e.__dict__.keys():
+					self.__dict__[ Class ][e.name] = e
 				p = lower.find( starter, q )
-
-	def getElement(self, name=None, ID=None):
-		if name is not None:
-			for Class in ElementClassesOfInterest.keys():
-				for element in self.__dict__[ Class ]:
-					if element.name == name:
-						return element
-		elif ID is not None:
-			for Class in ElementClassesOfInterest.keys():
-				for element in self.__dict__[ Class ]:
-					if element.id == ID:
-						return element
-		return None
 
 	def POSTdict(self):
 		result = {}
-		for i in self.input:
+		for i in self.input.values():
 			result[ i.name ] = quote_plus( i.value ) #.replace(" ", "+") 
 		return result
 
 	def POSTline(self):
 		result = ""
-		for i in self.input:
+		for i in self.input.values():
 			result += i.name+"="+quote_plus( i.value )+"&"
 		return result.rstrip("&")
 
@@ -178,6 +207,9 @@ class Eval:
 		A = int(self.source[q:r])					# base to convert to
 		if self.debug:
 			print "base: "+str(A)
+		if A > 36:
+			A = 36							# JavaScript toString radix cannot be > 36
+
 		r += 1
 		s = self.source.find(",'", r)
 		C = int(self.source[r:s])					# magic number
@@ -204,7 +236,7 @@ class Eval:
 				before = toString(number, base)
 				after = dictionary[number]
 				if self.debug:
-					print "Replacing "+before+" by "+after+" ..."
+					print "Replacing "+str(before)+" by "+str(after)+" ..."
 				code = re.sub(r'\b'+before+r'\b', after, code)
 				if self.debug:
 					print code
@@ -248,7 +280,7 @@ class HTML:
 
 		self.debug("Found "+str(len(self.forms))+" forms.")
 
-	def find_form(self, name=None, ID=None, action=None):			# return specified form
+	def findForm(self, name=None, ID=None, action=None):			# return specified form
 		if self.forms is None:
 			self.parse()						# parse, if not parsed already
 		if name is not None:
@@ -267,7 +299,7 @@ class HTML:
 			return self.forms[0]
 		return None
 
-	def find_eval(self, occurence=1):
+	def findEval(self, occurence=1):
 		return Eval("eval("+between(self.string, "eval(", "</script>", occurence).strip(), debug=False)
 
 	def save(self, filename=None):

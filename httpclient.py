@@ -1,15 +1,31 @@
 #!/usr/bin/python
 # -*- coding: iso-8859-15 -*-
 
-import httplib, signal
-
+import httplib
 from urlparser import splitURL, HTTP, HTTPS
 from htmlparser import HTML, Form
+from datetime import datetime
+import socket
+import sys
 
 GET	= "GET"
 POST	= "POST"
 
-class Robot:
+def decode(page):
+	page = page.decode('iso-8859-15')
+	i = 0
+	while i < len(page):
+		try:
+			str(page[i])
+			i += 1
+		except:
+			if len(page) > i+1:
+				page = page[:i]+page[i+1:]
+			else:
+				page = page[:i]
+	return page
+
+class HttpClient:
 	def __init__(self, debug=False):								# defaults
 		self.Connection = None
 		self.ConnectionTimeout = 3 # seconds
@@ -19,7 +35,7 @@ class Robot:
 		self.SendReferer = True
 		self.Site = "/"
 		self.SendCookies = True
-		self.Cookie = {}
+		self.Cookies = {}
 		self.Headers = []
 		self.Page = None
 		self.parsed = False
@@ -32,22 +48,16 @@ class Robot:
 		if self.print_debug:
 			print msg
 
-	def connection_timeout(self, signum, frame):
-		self.debug("Connection timed out.")
-		self.disconnect()
-
 	def connect(self):										# connect to remote host
 		self.HaveReferer = False
+		self.debug("Connecting to "+self.Host+" ...")
 		if self.Protocol == HTTP:
-			self.debug("Connecting to "+self.Protocol+self.Host+" ...")
 			self.Connection = httplib.HTTPConnection( self.Host )
 		elif self.Protocol == HTTPS:
-			self.debug("Connecting to "+self.Protocol+self.Host+" ...")
 			self.Connection = httplib.HTTPSConnection( self.Host )				# Warning: All certificates are accepted !
+		self.last_request = datetime.now()
 
 	def request(self, Method, URL, Variables={}, AdditionalHeaders={}, SendReferer=None, SendCookies=None, FollowRedirects=True):		# returns response.status code
-
-		signal.alarm(0)		# disable the connection timeout alarm
 
 		Method = Method.upper()											# check Method
 		if not Method in [GET,POST]:
@@ -57,7 +67,7 @@ class Robot:
 		if self.Page is not None:
 			del self.Page
 		Protocol, Host, Site = splitURL(URL, default_protocol=self.Protocol, default_host=self.Host, default_site=self.Site)
-		self.debug(Method+" "+Protocol+Host+Site)
+		self.debug("Request: "+Method+" "+Protocol+Host+Site)
 
 		if self.Connection is not None:		# if it's None, we are disconnected and can safely skip this check
 			if ( self.Host != Host ) or ( self.Protocol != Protocol ):
@@ -69,25 +79,36 @@ class Robot:
 			self.Protocol = Protocol
 			self.Host = Host
 			self.Site = "/"
-			self.connect()			# connect !
+			self.connect()
+
+#		delta = (datetime.now() - self.last_request).seconds
+#		if delta > self.ConnectionTimeout:
+#			self.debug("Connection timed out "+str(delta)+" seconds ago.")
+#			self.disconnect()
+#			self.connect()
 
 		additional_headers = {"Host":self.Host, "User-Agent":self.Agent, "Accept-Encoding":"identity", "Connection":"keep-alive"}
 			# at least Accept-Encoding:identity is added by httplib anyway, but is nevertheless shown here for completeness
-		additional_headers.update(AdditionalHeaders)
 		if SendReferer is None:
 			SendReferer = self.SendReferer								# send a referer ?
 		if SendReferer and self.HaveReferer:
 			additional_headers["Referer"] = self.Protocol+self.Host+self.Site
-		else:
+		additional_headers.update(AdditionalHeaders)
+		if 'Referer' in additional_headers.keys():
+			if SendReferer:
+				self.debug("\tReferer: "+additional_headers["Referer"])
+			else:
+				del additional_headers["Referer"]
+		if not 'Referer' in additional_headers.keys():
 			self.debug("\tNo referer.")
 		self.HaveReferer = True
 
 		if SendCookies is None:
 			SendCookies = self.SendCookies								# send cookies ?
-		if SendCookies and ( self.Cookie != {} ):
+		if SendCookies and ( self.Cookies != {} ):
 			c = ""
-			for key in self.Cookie:
-				c += key+"="+self.Cookie[key]+"; "
+			for key in self.Cookies:
+				c += key+"="+self.Cookies[key]+"; "
 			additional_headers["Cookie"] = c
 			self.debug("\tSending cookie.")
 		else:
@@ -101,14 +122,31 @@ class Robot:
 			additional_headers["Content-Type"] = "application/x-www-form-urlencoded"
 
 		self.debug("\tRequest: "+Method+" "+Site+" "+Parameters+" "+str(additional_headers)+'"')		# HTTP REQUEST
-		self.Connection.request(Method, Site, Parameters, additional_headers)
+		try:
+			self.Connection.request(Method, Site, Parameters, additional_headers)
+		except socket.error:
+			errno, errstr = sys.exc_info()[:2]
+			if errno == 110:
+				self.debug("socket.error: [Errno 110] Connection timed out. Reconnecting ...")
+				self.disconnect()
+				self.connect()
+				self.Connection.request(Method, Site, Parameters, additional_headers)
+			elif errno == -2:
+				self.debug("Exception. Probably host name could not be resolved.")
+				raise
+			else:
+				self.debug("Uncaught socket error")
+				raise
+		self.last_request = datetime.now()
 #		try:
 		response = self.Connection.getresponse()
 #		except httplib.BadStatusLine:
 #			self.connect()
 		self.debug("\t"+str(response.status)+" "+response.reason)
-		self.Headers = response.getheaders()
-		self.Page = HTML(response.read())  # remember: you must read every response in order to be ready to receive the next one!
+		self.Headers = {}
+		for Tuple in response.getheaders():
+			self.Headers[Tuple[0]] = Tuple[1]
+		self.Page = HTML(decode(response.read()))  # remember: you must read every response in order to be ready to receive the next one!
 		if self.AutoSave:
 			self.savepage()
 
@@ -118,7 +156,6 @@ class Robot:
 
 			Cookie = response.getheader("Set-Cookie")		# process received cookies
 			if SendCookies and Cookie != None and Cookie != "":
-				self.Cookie = {}
 				key = "expires="				# "expires" value contains comma. must be removed before splitting.
 				p = Cookie.find(key)
 				while p > -1:
@@ -134,12 +171,14 @@ class Robot:
 					s = C.split(";")[0].split("=")		# save only until first semicolon, discard path=...; domain=...;
 					key = s[0].lstrip(" ")
 					value = "=".join(s[1:])
-					self.Cookie[ key ] = value
-					self.debug("\tCookie received: "+key+" = "+value)
+					if value == 'deleted':
+						if key in self.Cookies.keys():
+							del self.Cookies[ key ]
+						self.debug("\tCookie deleted: "+key+" = "+value)
+					else:
+						self.Cookies[ key ] = value
+						self.debug("\tCookie received: "+key+" = "+value)
 
-			# Set the signal handler and a timeout alarm
-			signal.signal(signal.SIGALRM, self.connection_timeout)
-			signal.alarm(self.ConnectionTimeout)
 			return response.status
 
 		elif response.status in [301, 302]: # Redirects: 301 Moved Permanently, 302 Found
@@ -150,26 +189,37 @@ class Robot:
 					return self.request( GET, location, {}, {}, SendReferer, SendCookies, FollowRedirects )
 				else:
 					self.debug("\tRedirect to "+location+" ignored.")
-					return response.status
+					return location
 			else:
 				return response.status
 
 		else:	# not 200 OK or 302 Redirect
 			return response.status
 
-	def GET(self, URL):
-		return self.request(GET, URL)
+	def GET(self, URL, Variables={}, AdditionalHeaders={}):
+		return self.request(GET, URL, Variables, AdditionalHeaders)
 
 	def POST(self, URL, Variables={}, AdditionalHeaders={}):
 		return self.request(POST, URL, Variables, AdditionalHeaders)
+
+	def XMLHttpRequest(self, URL, Variables={}, AdditionalHeaders={}):		# emulate a JavaScript XMLHttpRequest
+		AdditionalHeaders['X-Requested-With'] = 'XMLHttpRequest'
+		return self.request(GET, URL, Variables, AdditionalHeaders, SendReferer=False)
+
+	def ajax(self, method, URL, Variables={}, AdditionalHeaders={}):		# emulate ajax XMLHttpRequest
+		AdditionalHeaders['X-Requested-With'] = 'XMLHttpRequest'
+		if method == GET:
+			return self.request(GET, URL, Variables, AdditionalHeaders, SendReferer=False)
+		elif method == POST:
+			return self.request(POST, URL, Variables, AdditionalHeaders, SendReferer=False)
 
 	def submit(self, form):								# submit form
 		self.request( form.method, form.action, form.POSTdict() )
 
 	def export_cookie_as_wget_arguments(self):
 		result = ""
-		for key in self.Cookie.keys():
-			result += '--header="Cookie: '+key+'='+self.Cookie[key]+'" '
+		for key in self.Cookies.keys():
+			result += '--header="Cookie: '+key+'='+self.Cookies[key]+'" '
 		return result
 
 	def disconnect(self):
@@ -183,6 +233,9 @@ class Robot:
 		self.Connection = None			# __init__ would be too much, e.g. if one host redirects to another host we may need the referer
 
 	def __del__(self):
-		self.disconnect()
-		self.debug("Robot destroyed.")
+		try:
+			self.disconnect()
+			self.debug("Robot destroyed.")
+		except:
+			pass
 
