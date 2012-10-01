@@ -1,9 +1,6 @@
 #!/usr/bin/python
 # -*- coding: iso-8859-15 -*-
 
-from subprocess import Popen
-from shlex import split
-
 from configparser import loadconfig
 username, password = loadconfig()
 
@@ -19,7 +16,8 @@ print 'I found '+str(len(images))+' images in this account'
 for image in images:
 	URL = "http://img"+image.server+".imageshack.us/img"+image.server+"/88/"+image.filename
 	print URL
-	Popen(split('wget -c '+URL)).wait()
+	i.r.GET(URL)
+	i.r.Page.save(filename=image.filename)
 
 #print 'Requesting album list ...'
 #albums = i.get_album_list()
