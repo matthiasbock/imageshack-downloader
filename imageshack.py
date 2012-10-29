@@ -2,44 +2,30 @@
 # -*- coding: iso-8859-15 -*-
 
 from httpclient import HttpClient
-import random
 from htmlparser import between
-import pickle
-from math import ceil
 
-from image import Image
-from album import Album
-from tag import Tag
-
-def rand():
-	return '0.'+''.join([str(random.randint(0,9)) for i in range(16)])	# 0.xxxxxxxxxxxxxxxx
-
-class ImageShack:
-	def __init__(self, username=None, password=None):
-		self.reset()
-		self.username = username
-		self.password = password
-
-	def reset(self):
-		random.seed()
+class ImageShack_Account:
+	def __init__(self):
 		self.r = HttpClient(debug=False)
 		self.logged_in = False
 		self.Images = None
 		self.Tags = None
 		self.Albums = None
 
-	def login(self, username=None, password=None):
-		if username is None or password is None:
-			username = self.username
-			password = self.password
-		if username is None or password is None:
-			return False
+	def login(self, username, password):
+		# GET is sufficient
+		#self.r.GET('imageshack.us/auth.php?username='+username+'&password'+password)
 
+		# but we use POST, to check, if login was successfull
 		self.r.POST('imageshack.us/auth.php', {'stay_logged_in':'true', 'format':'json', 'username':username, 'password':password})
 
 		import simplejson
 		json = simplejson.loads(str(self.r.Page))
 		self.logged_in = json['status'] is True
+		
+		if self.logged_in:
+			self.get_number_of_pages()
+		
 		return self.logged_in
 
 	def __del__(self):
@@ -48,33 +34,36 @@ class ImageShack:
 		except:
 			pass
 
+
 	# Images
 
-	def download_image_list(self, ipage=1, tagid=-1):
-		if not self.logged_in:
-			if not self.login():
-				return False
+	def get_number_of_pages(self):
+		self.r.GET('my.imageshack.us/images.php?ipage=1')
 
-		print 'page '+str(ipage)
-		self.r.GET('my.imageshack.us/images.php?ipage='+str(ipage)+'&tagid='+str(tagid)+'&rand='+rand() )
+		# number of image pages
+		self.pages = int(between(self.r.Page, '<input type="hidden" id="inumpages" value="', '"'))
+		# number of images in total
+		self.images = int(between(self.r.Page, '<input type="hidden" id="inumitems" value="', '"'))
 
-		self.inumpages = int(between(self.r.Page, '<input type="hidden" id="inumpages" value="', '"'))		# number of image pages
-		self.inumitems = int(between(self.r.Page, '<input type="hidden" id="inumitems" value="', '"'))		# number of images in total
-		self.inumcached = int(between(self.r.Page, '<input type="hidden" id="inumcached" value="', '"'))	# number of images on current page
+	def get_images_on_page(self, ipage):
+		self.r.GET('my.imageshack.us/images.php?ipage='+str(ipage))
 
-		for i in range(self.inumcached):
-			img = Image(between(self.r.Page, '<div id="i'+str(i)+'">', '</div></div></div></div>', include_after=True), self)
-			if not img in self.Images:
-				self.Images.append(img)
-			
+		# number of images on current page
+		current_page_images = int(between(self.r.Page, '<input type="hidden" id="inumcached" value="', '"'))
 
-	def get_image_list(self, tagid=-1):
-		self.Images = []
-		self.download_image_list(1, tagid)
-		if self.inumpages > 1:
-			for i in range(self.inumpages-1):
-				self.download_image_list(i+2, tagid)
-		return self.Images
+		# parse divs
+		from parse_images import Image
+
+		images = {}
+		for i in range(current_page_images):
+			# ix = id of image on current page
+			img = Image( between(self.r.Page, '<div id="i'+str(i)+'">', '</div></div></div></div>', include_after=True) )
+
+			# img.id = global id of image
+			images[ img.id ] = img
+
+		return images
+
 
 	# Tags
 
@@ -92,7 +81,7 @@ class ImageShack:
 		for i in range(self.tnumitems):
 			page = i / tags_per_page
 			number = i % tags_per_page
-			self.Tags.append(Tag(between(self.r.Page, '<input type="hidden" id="tn'+str(page)+'_'+str(number)+'" value="', '"'), self))
+			#self.Tags.append(Tag(between(self.r.Page, '<input type="hidden" id="tn'+str(page)+'_'+str(number)+'" value="', '"'), self))
 
 		self.got_tag_list = True
 
@@ -109,14 +98,13 @@ class ImageShack:
 				return False
 		
 		self.r.GET('my.imageshack.us/my_gallery/')
-		self.r.Page.save()
 
 		self.inumitems = int(between(self.r.Page, '<input type="hidden" id="inumitems" value="', '"'))		# galleries
 		self.inumcached = int(between(self.r.Page, '<input type="hidden" id="inumcached" value="', '"'))	# number of galleries listed
 
 		self.Albums = []
-		for i in range(self.inumcached):
-			self.Albums.append(Album(between(self.r.Page, '<div id="i'+str(i)+'">', '</div></div>', include_after=True), self))
+		#for i in range(self.inumcached):
+		#	self.Albums.append(Album(between(self.r.Page, '<div id="i'+str(i)+'">', '</div></div>', include_after=True), self))
 		self.got_album_list = True
 
 	def get_album_list(self):

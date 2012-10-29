@@ -4,20 +4,40 @@
 from configparser import loadconfig
 username, password = loadconfig()
 
-from imageshack import ImageShack
+from imageshack import ImageShack_Account
 
 print 'Login ...'
-i = ImageShack(username, password)
+frog = ImageShack_Account()
+if frog.login(username, password):
+	print 'success'
+else:
+	print 'login failed'
+	from sys import exit
+	exit()
 
-print 'Requesting image list ...'
-images = i.get_image_list()
-print 'server says: '+str(i.inumitems)+' images in this account'
-print 'I found '+str(len(images))+' images in this account'
-for image in images:
-	URL = "http://img"+image.server+".imageshack.us/img"+image.server+"/88/"+image.filename
-	print URL
-	i.r.GET(URL)
-	i.r.Page.save(filename=image.filename)
+print 'Number of images: '+str(frog.images)
+print 'Number of pages: '+str(frog.pages)
+
+# download all images
+from os import mkdir
+from wget import wget
+
+# all pages
+for page in range(frog.pages):
+	# put in a separate folder
+	folder = 'page'+str(page+1).zfill(2)
+	print folder+' ...'
+	try:
+		mkdir(folder)
+	except:
+		pass
+
+	# all images
+	images = frog.get_images_on_page(page+1)
+	for i in images.keys():
+		wget(images[i].url, folder+'/'+images[i].filename, frog.r.Cookies)
+
+print 'completed.'
 
 #print 'Requesting album list ...'
 #albums = i.get_album_list()
