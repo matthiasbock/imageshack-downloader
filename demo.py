@@ -34,8 +34,12 @@ for page in range(frog.pages):
 
 	# all images
 	images = frog.get_images_on_page(page+1)
+	processes = []
 	for i in images.keys():
-		wget(images[i].url, folder+'/'+images[i].filename, frog.r.Cookies)
+		processes.append( wget(images[i].url, folder+'/'+images[i].filename, frog.r.Cookies) )
+	print str(len(processes))+' download processes started. Waiting for all downloads to finish before continuing ...'
+	for p in processes:
+		p.wait()
 
 print 'completed.'
 

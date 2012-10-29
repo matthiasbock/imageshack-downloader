@@ -8,4 +8,9 @@ def wget(url, saveto, cookies):
 	for key in cookies.keys():
 		Cookie += key+'='+cookies[key]+';'
 
-	Popen( split('/usr/bin/wget "'+url+'" --output-document="'+saveto+'" --header="'+Cookie+'" --timeout=2 --no-verbose') ).wait()
+	p=Popen( split('/usr/bin/wget "'+url+'" --output-document="'+saveto+'" --header="'+Cookie+'" --timeout=2 --tries=1 --no-verbose') )
+
+	from time import sleep
+	sleep(0.4)
+	
+	return p
