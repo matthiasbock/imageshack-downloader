@@ -23,14 +23,19 @@ from os import mkdir
 from wget import wget
 
 # all pages
+try:
+	mkdir('images')
+except:
+	pass
 for page in range(frog.pages):
 	# put in a separate folder
 	folder = 'page'+str(page+1).zfill(2)
 	print folder+' ...'
-	try:
-		mkdir(folder)
-	except:
-		pass
+#	try:
+#		mkdir(folder)
+#	except:
+#		pass
+	folder = 'images'
 
 	# all images
 	images = frog.get_images_on_page(page+1)
