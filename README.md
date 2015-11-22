@@ -7,3 +7,18 @@ Read more about that:
 https://medium.com/@ImageShack/3984af30964e
 
 License: GNU GPLv3
+
+## Usage
+
+Clone this repo and create a file named imageshack.conf with the following content:
+<pre>
+[Login]
+Username=your username
+Password=your password
+</pre>
+Run:
+<pre>./main.py</pre>
+or
+<pre>python main.py</pre>
+
+Depends on python-simplejson, python-configparser and wget.
