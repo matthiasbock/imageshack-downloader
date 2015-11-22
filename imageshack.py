@@ -1,8 +1,19 @@
 #!/usr/bin/python
 # -*- coding: iso-8859-15 -*-
 
+from ConfigParser import RawConfigParser
+
 from httpclient import HttpClient
 from htmlparser import between
+
+def loadconfig():
+	parser = RawConfigParser()
+	parser.read('imageshack.conf')
+	username = parser.get('Login', 'Username')
+	password = parser.get('Login', 'Password')
+	del parser
+
+	return username, password
 
 class ImageShack_Account:
 	def __init__(self):
