@@ -9,7 +9,7 @@ from httpclient import HttpClient
 from htmlparser import between
 
 # JSON parser
-from simplejson import loads,dumps
+import simplejson as json
 
 #
 # Object to hold authentication token
@@ -18,7 +18,7 @@ from simplejson import loads,dumps
 class ImageShack_Account:
 
     def __init__(self):
-        self.client = HttpClient(debug=False)
+        self.client = HttpClient(debug=True)
         self.logged_in = False
         self.images = None
         self.albums = None
@@ -49,29 +49,57 @@ class ImageShack_Account:
                     'username'      : username,
                     'password'      : password,
                     'set_cookies'   : '1',
-                    'remember_me'   : '1'
+                    'remember_me'   : '0'
                  }
         self.client.POST('https://api.imageshack.com/v2/user/login', params)
 
-        print str(self.client.Page)
+        # Server error, that sometimes happens        
+        if str(self.client.Page).find("404 Not Found") > -1:
+            return False
 
         # Parse response as JSON
-        json = loads(str(self.client.Page))
-        self.logged_in = json["success"] is True
-
-        # Extract username from response
-        # In the config file it could be the email address
-        self.username = json["result"]["username"]
+        response = json.loads(str(self.client.Page))
+        self.logged_in  = response["success"] is True
+        if not self.logged_in:
+            return False
         
-        return self.logged_in
+        # Extract username and token from response
+        # In the config file it could be the email address
+        self.username   = response["result"]["username"]
+        self.auth_token = response["result"]["auth_token"] 
+        
+        return True
 
     #
     # Images
     #
     def get_user_images(self):
-        #GET https://api.imageshack.com/v2/user/<username>/images
-        return
+        # Method:   GET https://api.imageshack.com/v2/user/<username>/images
+        # Response: ImagesListModel
         
+        # get total number of images
+        self.client.GET("https://api.imageshack.com/v2/user/"+self.username+"/images?limit=1")
+        print str(self.client.Page)
+        
+        response = json.loads(str(self.client.Page))
+        if not response["success"] is True:
+            print "Error!"
+            return
+
+        self.image_count = response["result"]["total"]
+
+        # request a complete list of images
+        self.client.GET("https://api.imageshack.com/v2/user/"+self.username+"/images?limit="+str(self.image_count))
+        print str(self.client.Page)
+
+        response = json.loads(str(self.client.Page))
+        if not response["success"] is True:
+            print "Error!"
+            return        
+
+        self.images = response["result"]
+        
+        return
         
     def get_number_of_pages(self):
         self.client.GET('my.imageshack.us/images.php?ipage=1')

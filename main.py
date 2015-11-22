@@ -14,10 +14,11 @@ else:
     print "Error: Login failed."
     exit()
 
-exit()
+print "Requesting a list of "+frog.username+"'s images..."
+frog.get_user_images()
+print "User has "+str(frog.image_count)+" image(s) online."
 
-print 'Number of images: '+str(frog.images)
-print 'Number of pages: '+str(frog.pages)
+exit()
 
 # iterate over all image pages
 try:
