@@ -4,7 +4,7 @@
 from configparser import loadconfig
 username, password = loadconfig()
 
-from imageshack import ImageShack_Account
+from api import ImageShack_Account
 
 print 'Login ...'
 frog = ImageShack_Account()
