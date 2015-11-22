@@ -3,7 +3,7 @@
 
 from api import ImageShack_Account
 from sys import exit
-from os import mkdir
+import os
 from wget import wget
 
 print "Login ..."
@@ -18,30 +18,36 @@ print "Requesting a list of "+frog.username+"'s images..."
 frog.get_user_images()
 print "User has "+str(frog.image_count)+" image(s) online."
 
-exit()
-
-# iterate over all image pages
+print "Downloading:"
+# to folder "images"
 try:
-    mkdir('images')
+    os.mkdir("images")
 except:
     pass
-for page in range(frog.pages):
-    # put in a separate folder
-    folder = 'page'+str(page+1).zfill(2)
-    print folder+' ...'
-#    try:
-#        mkdir(folder)
-#    except:
-#        pass
-    folder = 'images'
 
-    # all images
-    images = frog.get_images_on_page(page+1)
-    processes = []
-    for i in images.keys():
-        processes.append( wget(images[i].url, folder+'/'+images[i].filename, frog.r.Cookies) )
-    print str(len(processes))+' download processes started. Waiting for all downloads to finish before continuing ...'
-    for p in processes:
-        p.wait()
+# Download all images
+counter         = 1
+total           = frog.image_count
+download_errors = []
+for img in frog.images["images"]:
+    # save image in a subfolder
+    saveto = os.path.join("images", img["original_filename"])
+    print str(counter)+" of "+str(total)+" ("+"{0:.2f}".format(float(counter)/total)+"%): "+img["original_filename"]
+    counter += 1
 
-print 'completed.'
+    # invoke wget for downloading
+    process = wget(img["direct_link"], saveto, frog.client.Cookies)
+    process.wait()
+    
+    # remember all failed downloads
+    if process.returncode != 0:
+        download_errors.append(img["direct_link"])
+
+print "Download completed."
+
+# Print a list of the failed downloads
+if len(download_errors) > 0:
+    print "\nThere were errors attempting to download the following files:"
+    for url in download_errors:
+        print url
+    print ""
